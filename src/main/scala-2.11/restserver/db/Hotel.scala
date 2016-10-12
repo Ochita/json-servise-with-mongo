@@ -1,19 +1,24 @@
 package restserver.db
+import javafx.geometry.Point2D
+
 import reactivemongo.bson._
 
 /**
   * Created by anton on 10.10.16.
   */
 
-case class Hotel(id:String, sip_prefix:String)
+case class Location (x: Double, y: Double) extends Point2D (x, y)
+
+case class Hotel(id:String, location: Location)
 
 object Hotel {
 
   implicit object HotelBSONReader extends BSONDocumentReader[Hotel] {
     def read(doc: BSONDocument): Hotel = {
+      val location = doc.getAs[List[Double]]("location").get
       Hotel(
         id = doc.getAs[BSONObjectID]("_id").get.stringify,
-        sip_prefix = doc.getAs[String]("sip_prefix").get
+        location = new Location(location.head, location.last)
       )
     }
   }
@@ -22,7 +27,7 @@ object Hotel {
     def write(hotel: Hotel): BSONDocument =
       BSONDocument(
         "_id" -> BSONObjectID.parse(hotel.id).get,
-        "sip_prefix" -> hotel.sip_prefix
+        "location" -> List(hotel.location.getX, hotel.location.getY)
       )
   }
 }
