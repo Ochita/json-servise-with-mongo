@@ -44,6 +44,7 @@ object Main extends App with Config {
             post {
               entity(as[Hotel]) { request =>
                 val hotel = if (request.id != null) request else request.copy(BSONObjectID.generate().stringify)
+                dbRef ! Invalidate("hotels")
                 complete(HotelsCollection.save(hotel))
               }
             }
@@ -63,6 +64,7 @@ object Main extends App with Config {
               post {
                 entity(as[Hotel]) { request =>
                   val hotel = if (request.id != null) request else request.copy(BSONObjectID.generate().stringify)
+                  dbRef ! Invalidate("hotels")
                   complete(HotelsCollection.save(hotel))
                 }
               }
