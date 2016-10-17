@@ -18,7 +18,7 @@ object Hotel {
       val location = doc.getAs[List[Double]]("location").get
       Hotel(
         id = doc.getAs[BSONObjectID]("_id").get.stringify,
-        location = new Location(location.head, location.last)
+        location = Location(location.head, location.last)
       )
     }
   }

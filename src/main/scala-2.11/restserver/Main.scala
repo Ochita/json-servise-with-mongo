@@ -8,10 +8,11 @@ import akka.http.scaladsl.server.Directives._
 import de.heikoseeberger.akkahttpjackson.JacksonSupport._
 import akka.stream.ActorMaterializer
 import reactivemongo.bson.BSONObjectID
-import restserver.actors.ComputingActor
+import restserver.actors.{CacheDBActor, ComputingRouterActor}
 import restserver.db.{Hotel, HotelsCollection, Location}
 import akka.pattern.ask
 import restserver.messages.GetNearest
+import restserver.messages.dboperations._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -21,12 +22,13 @@ import scala.concurrent.duration._
   * Created by anton on 10.10.16.
   */
 object Main extends App with Config {
-  implicit val actorSystem = ActorSystem()
+  implicit val actorSystem = ActorSystem("app-system")
   implicit val ec: ExecutionContext = actorSystem.dispatcher
   implicit val logger: LoggingAdapter = Logging(actorSystem, getClass)
   implicit val mat: ActorMaterializer = ActorMaterializer()
 
-  val computingActor = actorSystem.actorOf(Props[ComputingActor], "computing-actor")
+  val dbRef= actorSystem.actorOf(Props[CacheDBActor], "cache-router")
+  val computingRef= actorSystem.actorOf(Props(new ComputingRouterActor(dbRef)), "computing-router")
 
   val route =
     pathSingleSlash {
@@ -52,11 +54,30 @@ object Main extends App with Config {
             }
           }
       } ~
+      pathPrefix("cached") {
+        pathPrefix("hotels") {
+          pathEnd {
+            get {
+              complete(dbRef.ask(FindAll("hotels"))(5.seconds))
+            } ~
+              post {
+                entity(as[Hotel]) { request =>
+                  val hotel = if (request.id != null) request else request.copy(BSONObjectID.generate().stringify)
+                  complete(HotelsCollection.save(hotel))
+                }
+              }
+          } ~
+            path("(.*)".r) { id =>
+              get {
+                complete(dbRef.ask(FindById("hotels", id))(5.seconds))
+              }
+            }
+        }
+      } ~
       path("nearest") {
         post {
           entity(as[Location]) { location =>
-            val f = computingActor.ask(GetNearest(location))(800 milliseconds).mapTo[Hotel]
-            complete(f)
+            complete(computingRef.ask(GetNearest(location))(5.seconds))
           }
         }
       }
